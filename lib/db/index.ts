@@ -1,14 +1,11 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
 
 export type Database = PostgresJsDatabase<typeof schema>;
 
 let _db: Database | null = null;
-let _supabase: SupabaseClient | null = null;
-let _supabaseAdmin: SupabaseClient | null = null;
 
 function getOrInit<T>(label: string, init: () => T): T {
   const errMsg = (e: unknown) =>
@@ -40,38 +37,6 @@ export function getDb(): { db: Database | null; error: string | null } {
     return { db: _db, error: null };
   } catch (err) {
     return { db: null, error: err instanceof Error ? err.message : "Database unavailable" };
-  }
-}
-
-export function getSupabase(): { supabase: SupabaseClient | null; error: string | null } {
-  try {
-    if (!_supabase) {
-      _supabase = getOrInit("Supabase", () => {
-        const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-        if (!url || !key) throw new Error("NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is not set");
-        return createClient(url, key);
-      });
-    }
-    return { supabase: _supabase, error: null };
-  } catch (err) {
-    return { supabase: null, error: err instanceof Error ? err.message : "Supabase unavailable" };
-  }
-}
-
-export function getSupabaseAdmin(): { supabase: SupabaseClient | null; error: string | null } {
-  try {
-    if (!_supabaseAdmin) {
-      _supabaseAdmin = getOrInit("Supabase Admin", () => {
-        const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-        if (!url || !key) throw new Error("SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_URL is not set");
-        return createClient(url, key);
-      });
-    }
-    return { supabase: _supabaseAdmin, error: null };
-  } catch (err) {
-    return { supabase: null, error: err instanceof Error ? err.message : "Supabase unavailable" };
   }
 }
 
