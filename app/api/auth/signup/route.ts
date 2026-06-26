@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ redirect: "/interviews" });
   } catch (err) {
     console.error("Signup error:", err);
+    console.error("DB", process.env.DATABASE_URL);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Signup failed" },
       { status: 500 }
