@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { startInterview } from "@/lib/actions/interview-take";
 
 export function InstructionsForm({ token }: { token: string }) {
   const [screenConsent, setScreenConsent] = useState(false);
@@ -19,7 +18,11 @@ export function InstructionsForm({ token }: { token: string }) {
   const handleStart = async () => {
     setLoading(true);
     try {
-      await startInterview(token);
+      const res = await fetch(`/api/interview/${token}/start`, { method: "POST" });
+      if (!res.ok) {
+        setLoading(false);
+        return;
+      }
       const params = new URLSearchParams();
       if (webcamConsent) params.set("webcam", "true");
       router.push(`/interview/${token}/start?${params.toString()}`);

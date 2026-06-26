@@ -1,91 +1,108 @@
-import { notFound } from "next/navigation";
-import { getDb } from "@/lib/db";
-import { candidates, answers, questions, interviewQuestions, recordings, flags, scores } from "@/lib/db/schema";
-import { eq, and, desc } from "drizzle-orm";
-import { verifySession } from "@/lib/auth/dal";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { apiGet } from "@/lib/api-client";
 import { formatDate } from "@/lib/utils";
 import { ScoreForm } from "./score-form";
 import { MarkForm } from "./mark-form";
 
-export default async function CandidateDetailPage(props: {
-  params: Promise<{ id: string; candidateId: string }>;
-}) {
-  const { id: interviewId, candidateId } = await props.params;
-  const session = await verifySession();
-  if (!session) notFound();
+interface Candidate {
+  id: string;
+  name: string;
+  email: string;
+  status: string;
+}
 
-  const { db, error } = getDb();
+interface Answer {
+  id: string;
+  answerText: string | null;
+  code: string | null;
+  language: string | null;
+  questionId: string;
+  questionTitle: string;
+  questionType: string;
+  questionOrder: number;
+}
 
-  if (!db || error) {
-    return (
-      <div className="space-y-6">
-        <Card>
-          <CardContent className="py-8 text-center text-sm text-destructive">
-            Database is not available. Please check your configuration and try again.
-          </CardContent>
-        </Card>
-      </div>
-    );
+interface Recording {
+  id: string;
+  type: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+interface Flag {
+  id: string;
+  type: string;
+  createdAt: string;
+}
+
+interface Question {
+  id: string;
+  title: string;
+  type: string;
+  order: number;
+}
+
+interface Score {
+  questionId: string;
+  score: number;
+  feedback: string | null;
+}
+
+export default function CandidateDetailPage() {
+  const params = useParams<{ id: string; candidateId: string }>();
+
+  const [candidate, setCandidate] = useState<Candidate | null>(null);
+  const [answers, setAnswers] = useState<Answer[]>([]);
+  const [recordings, setRecordings] = useState<Recording[]>([]);
+  const [flags, setFlags] = useState<Flag[]>([]);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [scores, setScores] = useState<Score[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await apiGet<{
+          candidate: Candidate;
+          answers: Answer[];
+          recordings: Recording[];
+          flags: Flag[];
+          questions: Question[];
+          scores: Score[];
+        }>(`/api/interviews/${params.id}/candidates/${params.candidateId}`);
+        setCandidate(res.candidate);
+        setAnswers(res.answers);
+        setRecordings(res.recordings);
+        setFlags(res.flags);
+        setQuestions(res.questions);
+        setScores(res.scores);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [params.id, params.candidateId]);
+
+  if (loading) {
+    return <p className="text-sm text-muted-foreground">Loading...</p>;
   }
 
-  const [candidate] = await db
-    .select()
-    .from(candidates)
-    .where(and(eq(candidates.id, candidateId), eq(candidates.interviewId, interviewId)))
-    .limit(1);
+  if (!candidate) {
+    return <p className="text-destructive">Candidate not found</p>;
+  }
 
-  if (!candidate) notFound();
-
-  const [answersList, recordingsList, flagsList, allQuestions, existingScores] = await Promise.all([
-    db
-      .select({
-        id: answers.id,
-        answerText: answers.answerText,
-        code: answers.code,
-        language: answers.language,
-        questionId: answers.questionId,
-        questionTitle: questions.title,
-        questionType: questions.type,
-        questionOrder: interviewQuestions.order,
-      })
-      .from(answers)
-      .innerJoin(questions, eq(answers.questionId, questions.id))
-      .innerJoin(interviewQuestions, eq(answers.questionId, interviewQuestions.questionId))
-      .where(eq(answers.candidateId, candidateId))
-      .orderBy(interviewQuestions.order),
-    db
-      .select()
-      .from(recordings)
-      .where(eq(recordings.candidateId, candidateId)),
-    db
-      .select()
-      .from(flags)
-      .where(eq(flags.candidateId, candidateId))
-      .orderBy(desc(flags.createdAt)),
-    db
-      .select({
-        id: questions.id,
-        title: questions.title,
-        type: questions.type,
-        order: interviewQuestions.order,
-      })
-      .from(questions)
-      .innerJoin(interviewQuestions, eq(questions.id, interviewQuestions.questionId))
-      .where(eq(interviewQuestions.interviewId, interviewId))
-      .orderBy(interviewQuestions.order),
-    db
-      .select()
-      .from(scores)
-      .where(and(eq(scores.candidateId, candidateId), eq(scores.companyId, session.userId))),
-  ]);
-
-  const scoreMap = new Map(existingScores.map((s) => [s.questionId, s]));
-  const avgScore = existingScores.length > 0
-    ? (existingScores.reduce((sum, s) => sum + s.score, 0) / existingScores.length).toFixed(1)
+  const scoreMap = new Map(scores.map((s) => [s.questionId, s]));
+  const avgScore = scores.length > 0
+    ? (scores.reduce((sum, s) => sum + s.score, 0) / scores.length).toFixed(1)
     : null;
 
   return (
@@ -116,21 +133,21 @@ export default async function CandidateDetailPage(props: {
         </div>
       </div>
 
-      <MarkForm candidateId={candidate.id} currentStatus={candidate.status} />
+      <MarkForm candidateId={candidate.id} currentStatus={candidate.status} interviewId={params.id} />
 
       <Separator />
 
-      {flagsList.length > 0 && (
+      {flags.length > 0 && (
         <Card className="border-destructive/50">
           <CardHeader>
             <CardTitle className="text-base text-destructive">
-              Flags ({flagsList.length})
+              Flags ({flags.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-32">
               <div className="space-y-2">
-                {flagsList.map((f) => (
+                {flags.map((f) => (
                   <div key={f.id} className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">{f.type.replace("_", " ")}</span>
                     <span className="text-muted-foreground">{formatDate(f.createdAt)}</span>
@@ -142,13 +159,13 @@ export default async function CandidateDetailPage(props: {
         </Card>
       )}
 
-      {recordingsList.length > 0 && (
+      {recordings.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Recordings</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {recordingsList.map((r) => (
+            {recordings.map((r) => (
               <div key={r.id}>
                 <p className="text-sm font-medium">{r.type} recording</p>
                 <p className="text-xs text-muted-foreground">
@@ -162,8 +179,8 @@ export default async function CandidateDetailPage(props: {
 
       <div className="space-y-6">
         <h2 className="text-lg font-medium">Questions & Answers</h2>
-        {allQuestions.map((q) => {
-          const answer = answersList.find((a) => a.questionId === q.id);
+        {questions.map((q) => {
+          const answer = answers.find((a) => a.questionId === q.id);
           const currentScore = scoreMap.get(q.id);
 
           return (
@@ -201,8 +218,8 @@ export default async function CandidateDetailPage(props: {
 
                 <ScoreForm
                   questionId={q.id}
-                  candidateId={candidateId}
-                  interviewId={interviewId}
+                  candidateId={candidate.id}
+                  interviewId={params.id}
                   currentScore={currentScore?.score ?? null}
                   currentFeedback={currentScore?.feedback ?? null}
                 />

@@ -1,12 +1,36 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getInterviews } from "@/lib/actions/interviews";
+import { apiGet } from "@/lib/api-client";
 import { formatDate } from "@/lib/utils";
 
-export default async function InterviewsPage() {
-  const interviewsList = await getInterviews();
+interface Interview {
+  id: string;
+  title: string;
+  description: string;
+  timeLimitMinutes: number;
+  status: string;
+  createdAt: string;
+}
+
+export default function InterviewsPage() {
+  const [interviews, setInterviews] = useState<Interview[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiGet<{ interviews: Interview[] }>("/api/interviews")
+      .then((res) => setInterviews(res.interviews))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return <div className="space-y-6"><p className="text-sm text-muted-foreground">Loading...</p></div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -22,7 +46,7 @@ export default async function InterviewsPage() {
         </Link>
       </div>
 
-      {interviewsList.length === 0 ? (
+      {interviews.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-16 text-center">
           <p className="text-lg font-medium">No interviews yet</p>
           <p className="text-sm text-muted-foreground">
@@ -31,7 +55,7 @@ export default async function InterviewsPage() {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {interviewsList.map((interview) => (
+          {interviews.map((interview) => (
             <Link key={interview.id} href={`/interviews/${interview.id}`}>
               <Card className="transition-colors hover:bg-muted/50">
                 <CardHeader>

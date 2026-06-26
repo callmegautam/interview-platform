@@ -1,17 +1,39 @@
 "use client";
 
-import { useActionState } from "react";
+import { useState, FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
-import { login } from "@/lib/auth/actions";
+import { apiPost } from "@/lib/api-client";
 
 export function LoginForm() {
-  const [state, action, pending] = useActionState(login, undefined);
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setPending(true);
+    setError(null);
+
+    const form = new FormData(e.currentTarget);
+    try {
+      const res = await apiPost<{ redirect: string }>("/api/auth/login", {
+        email: form.get("email"),
+        password: form.get("password"),
+      });
+      router.push(res.redirect);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed");
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
-    <form action={action} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>
         <Input id="email" name="email" type="email" placeholder="m@example.com" required />
@@ -22,8 +44,8 @@ export function LoginForm() {
         </div>
         <Input id="password" name="password" type="password" required />
       </div>
-      {state?.error && (
-        <p className="text-sm text-destructive">{state.error}</p>
+      {error && (
+        <p className="text-sm text-destructive">{error}</p>
       )}
       <Button type="submit" className="w-full" disabled={pending}>
         {pending ? "Signing in..." : "Sign in"}

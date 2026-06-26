@@ -1,6 +1,6 @@
 "use client";
 
-import { logout } from "@/lib/auth/actions";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { LogOut, Menu } from "lucide-react";
 import {
@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/sheet";
 import Link from "next/link";
 import { BarChart3, FileQuestion, ListTodo } from "lucide-react";
+import { apiPost } from "@/lib/api-client";
 
 const navItems = [
   { href: "/interviews", label: "Interviews", icon: ListTodo },
@@ -18,6 +19,17 @@ const navItems = [
 ];
 
 export function DashboardHeader({ companyName }: { companyName: string }) {
+  const router = useRouter();
+
+  async function handleLogout() {
+    try {
+      const res = await apiPost<{ redirect: string }>("/api/auth/logout");
+      router.push(res.redirect);
+    } catch {
+      router.push("/login");
+    }
+  }
+
   return (
     <header className="flex h-14 items-center gap-4 border-b px-6">
       <Sheet>
@@ -44,12 +56,10 @@ export function DashboardHeader({ companyName }: { companyName: string }) {
       </Sheet>
       <span className="text-sm text-muted-foreground">{companyName}</span>
       <div className="flex-1" />
-      <form action={logout}>
-        <Button variant="ghost" size="sm">
-          <LogOut className="mr-2 size-4" />
-          Logout
-        </Button>
-      </form>
+      <Button variant="ghost" size="sm" onClick={handleLogout}>
+        <LogOut className="mr-2 size-4" />
+        Logout
+      </Button>
     </header>
   );
 }

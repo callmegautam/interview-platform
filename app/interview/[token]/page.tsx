@@ -1,18 +1,66 @@
-import { notFound, redirect } from "next/navigation";
-import { validateInterviewToken } from "@/lib/actions/interview-take";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { InstructionsForm } from "./instructions-form";
 
-export default async function InterviewInstructionsPage(props: {
-  params: Promise<{ token: string }>;
-}) {
-  const { token } = await props.params;
-  const data = await validateInterviewToken(token);
+interface InterviewData {
+  candidate: { name: string; email: string; status: string };
+  interview: { id: string; title: string; description: string; timeLimitMinutes: number };
+  questions: unknown[];
+}
 
-  if (!data) notFound();
+export default function InterviewInstructionsPage() {
+  const params = useParams<{ token: string }>();
+  const [data, setData] = useState<InterviewData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  if (data.status === "completed") {
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch(`/api/interview/${params.token}`);
+        if (!res.ok) {
+          const json = await res.json();
+          setError(json.error || "Invalid interview link");
+          return;
+        }
+        const json = await res.json();
+        setData(json);
+      } catch {
+        setError("Failed to load interview");
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [params.token]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-svh items-center justify-center px-4">
+        <p className="text-sm text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="flex min-h-svh items-center justify-center px-4">
+        <Card className="max-w-md text-center">
+          <CardHeader>
+            <CardTitle>Interview not found</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">{error || "Invalid or expired interview link"}</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (data.candidate.status === "completed") {
     return (
       <div className="flex min-h-svh items-center justify-center px-4">
         <Card className="max-w-md text-center">
@@ -27,10 +75,6 @@ export default async function InterviewInstructionsPage(props: {
         </Card>
       </div>
     );
-  }
-
-  if (data.status === "in_progress") {
-    redirect(`/interview/${token}/start`);
   }
 
   return (
@@ -50,7 +94,7 @@ export default async function InterviewInstructionsPage(props: {
             </div>
             <div>
               <span className="text-muted-foreground">Candidate</span>
-              <p className="font-medium">{data.name}</p>
+              <p className="font-medium">{data.candidate.name}</p>
             </div>
           </div>
 
@@ -65,7 +109,7 @@ export default async function InterviewInstructionsPage(props: {
             </ul>
           </div>
 
-          <InstructionsForm token={token} />
+          <InstructionsForm token={params.token} />
         </CardContent>
       </Card>
     </div>

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateInterviewToken, getInterviewQuestionsByToken } from "@/lib/actions/interview-take";
+import { requireDb, serverError } from "@/lib/api";
+import { candidates, interviews, interviewQuestions, questions } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 
 export async function GET(
   _req: NextRequest,
@@ -7,14 +9,47 @@ export async function GET(
 ) {
   try {
     const { token } = await context.params;
-    const [data, questions] = await Promise.all([
-      validateInterviewToken(token),
-      getInterviewQuestionsByToken(token),
-    ]);
+    const db = requireDb();
 
-    if (!data) {
+    const result = await db
+      .select({
+        id: candidates.id,
+        name: candidates.name,
+        email: candidates.email,
+        status: candidates.status,
+        interview: {
+          id: interviews.id,
+          title: interviews.title,
+          description: interviews.description,
+          timeLimitMinutes: interviews.timeLimitMinutes,
+        },
+      })
+      .from(candidates)
+      .innerJoin(interviews, eq(candidates.interviewId, interviews.id))
+      .where(eq(candidates.token, token))
+      .limit(1);
+
+    if (!result[0]) {
       return NextResponse.json({ error: "Invalid or expired interview link" }, { status: 404 });
     }
+
+    const data = result[0];
+    const interviewId = data.interview.id;
+
+    const questionsList = await db
+      .select({
+        id: questions.id,
+        title: questions.title,
+        description: questions.description,
+        type: questions.type,
+        language: questions.language,
+        codeStarter: questions.codeStarter,
+        order: interviewQuestions.order,
+      })
+      .from(interviewQuestions)
+      .innerJoin(questions, eq(interviewQuestions.questionId, questions.id))
+      .where(eq(interviewQuestions.interviewId, interviewId))
+      .orderBy(interviewQuestions.order);
 
     return NextResponse.json({
       candidate: {
@@ -23,13 +58,9 @@ export async function GET(
         status: data.status,
       },
       interview: data.interview,
-      questions,
+      questions: questionsList,
     });
   } catch (err) {
-    console.error("Token validation error:", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Internal server error" },
-      { status: 500 }
-    );
+    return serverError(err);
   }
 }

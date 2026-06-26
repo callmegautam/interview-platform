@@ -1,4 +1,7 @@
-import { notFound } from "next/navigation";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,19 +15,72 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getInterview, getInterviewCandidates, getInterviewQuestions } from "@/lib/actions/interviews";
+import { apiGet } from "@/lib/api-client";
 import { formatDate, getInterviewUrl } from "@/lib/utils";
 import { CopyButton } from "./copy-button";
 
-export default async function InterviewDetailPage(props: { params: Promise<{ id: string }> }) {
-  const { id } = await props.params;
-  const [interview, candidatesList, questions] = await Promise.all([
-    getInterview(id),
-    getInterviewCandidates(id),
-    getInterviewQuestions(id),
-  ]);
+interface Interview {
+  id: string;
+  title: string;
+  description: string;
+  timeLimitMinutes: number;
+  status: string;
+  createdAt: string;
+}
 
-  if (!interview) notFound();
+interface Candidate {
+  id: string;
+  name: string;
+  email: string;
+  status: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  token: string;
+}
+
+interface InterviewQuestion {
+  questionId: string;
+  order: number;
+  title: string;
+  type: string;
+  language: string | null;
+}
+
+export default function InterviewDetailPage() {
+  const params = useParams<{ id: string }>();
+
+  const [interview, setInterview] = useState<Interview | null>(null);
+  const [candidatesList, setCandidatesList] = useState<Candidate[]>([]);
+  const [questions, setQuestions] = useState<InterviewQuestion[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const [interviewRes, candidatesRes, questionsRes] = await Promise.all([
+          apiGet<{ interview: Interview }>(`/api/interviews/${params.id}`),
+          apiGet<{ candidates: Candidate[] }>(`/api/interviews/${params.id}/candidates`),
+          apiGet<{ questions: InterviewQuestion[] }>(`/api/interviews/${params.id}/questions`),
+        ]);
+        setInterview(interviewRes.interview);
+        setCandidatesList(candidatesRes.candidates);
+        setQuestions(questionsRes.questions);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [params.id]);
+
+  if (loading) {
+    return <p className="text-sm text-muted-foreground">Loading...</p>;
+  }
+
+  if (!interview) {
+    return <p className="text-destructive">Interview not found</p>;
+  }
 
   const firstCandidate = candidatesList[0];
   const inviteUrl = firstCandidate ? getInterviewUrl(firstCandidate.token) : "";
@@ -83,7 +139,7 @@ export default async function InterviewDetailPage(props: { params: Promise<{ id:
       <div>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-medium">Candidates</h2>
-          <Link href={`/interviews/${id}/results`}>
+          <Link href={`/interviews/${params.id}/results`}>
             <Button variant="outline" size="sm">View results</Button>
           </Link>
         </div>
@@ -127,7 +183,7 @@ export default async function InterviewDetailPage(props: { params: Promise<{ id:
                     {c.completedAt ? formatDate(c.completedAt) : "—"}
                   </TableCell>
                   <TableCell>
-                    <Link href={`/interviews/${id}/candidates/${c.id}`}>
+                    <Link href={`/interviews/${params.id}/candidates/${c.id}`}>
                       <Button variant="ghost" size="sm">Review</Button>
                     </Link>
                   </TableCell>

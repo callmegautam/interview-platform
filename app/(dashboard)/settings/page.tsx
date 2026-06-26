@@ -1,9 +1,40 @@
-import { verifySession, getCompany } from "@/lib/auth/dal";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+"use client";
 
-export default async function SettingsPage() {
-  const session = await verifySession();
-  const company = await getCompany();
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { apiGet } from "@/lib/api-client";
+
+interface Company {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export default function SettingsPage() {
+  const [company, setCompany] = useState<Company | null>(null);
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch("/api/auth/me");
+        const json = await res.json();
+        setCompany(json.company);
+        // We don't expose userId from the API, but we can get it from the company data
+        if (json.company) setSessionUserId(json.company.id);
+      } catch {
+        // ignore
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  if (loading) {
+    return <p className="text-sm text-muted-foreground">Loading...</p>;
+  }
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
@@ -27,7 +58,7 @@ export default async function SettingsPage() {
           </div>
           <div>
             <span className="text-muted-foreground">Account ID</span>
-            <p className="font-mono text-xs">{session.userId}</p>
+            <p className="font-mono text-xs">{sessionUserId ?? "Unknown"}</p>
           </div>
         </CardContent>
       </Card>

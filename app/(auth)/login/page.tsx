@@ -1,4 +1,3 @@
-import { login } from "@/lib/auth/actions";
 import { LoginForm } from "./login-form";
 
 export default function LoginPage() {

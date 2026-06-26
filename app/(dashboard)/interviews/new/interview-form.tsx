@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useState, FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { createInterview } from "@/lib/actions/interviews";
+import { apiPost } from "@/lib/api-client";
 
 interface Question {
   id: string;
@@ -18,10 +19,38 @@ interface Question {
 }
 
 export function InterviewForm({ questions }: { questions: Question[] }) {
-  const [state, action, pending] = useActionState(createInterview, undefined);
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setPending(true);
+    setError(null);
+
+    const form = new FormData(e.currentTarget);
+    const questionIds = form.getAll("questionIds").map(String);
+
+    try {
+      const res = await apiPost<{ interview: { id: string } }>("/api/interviews", {
+        title: form.get("title"),
+        description: form.get("description"),
+        timeLimitMinutes: form.get("timeLimitMinutes"),
+        questionIds,
+        candidateName: form.get("candidateName"),
+        candidateEmail: form.get("candidateEmail"),
+        candidatePhone: form.get("candidatePhone") || undefined,
+      });
+      router.push(`/interviews/${res.interview.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create interview");
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
-    <form action={action} className="space-y-8">
+    <form onSubmit={handleSubmit} className="space-y-8">
       <div className="space-y-4">
         <h2 className="text-lg font-medium">Interview details</h2>
         <div className="space-y-2">
@@ -79,8 +108,8 @@ export function InterviewForm({ questions }: { questions: Question[] }) {
         </div>
       </div>
 
-      {state?.error && (
-        <p className="text-sm text-destructive">{state.error}</p>
+      {error && (
+        <p className="text-sm text-destructive">{error}</p>
       )}
 
       <Button type="submit" disabled={pending}>

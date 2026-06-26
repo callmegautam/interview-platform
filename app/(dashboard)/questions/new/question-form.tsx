@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useState, FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,18 +13,42 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createQuestion } from "@/lib/actions/questions";
+import { apiPost } from "@/lib/api-client";
 
 const languages = [
   "javascript", "typescript", "python", "java", "cpp", "go", "rust", "ruby", "sql", "bash",
 ];
 
 export function QuestionForm() {
-  const [state, action, pending] = useActionState(createQuestion, undefined);
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
   const [type, setType] = useState("text");
 
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setPending(true);
+    setError(null);
+
+    const form = new FormData(e.currentTarget);
+    try {
+      await apiPost("/api/questions", {
+        title: form.get("title"),
+        description: form.get("description"),
+        type: form.get("type"),
+        language: form.get("language") || undefined,
+        codeStarter: form.get("codeStarter") || undefined,
+      });
+      router.push("/questions");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create question");
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
-    <form action={action} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-2">
         <Label htmlFor="title">Title</Label>
         <Input id="title" name="title" placeholder="Reverse a linked list" required />
@@ -84,8 +109,8 @@ export function QuestionForm() {
         </>
       )}
 
-      {state?.error && (
-        <p className="text-sm text-destructive">{state.error}</p>
+      {error && (
+        <p className="text-sm text-destructive">{error}</p>
       )}
 
       <Button type="submit" disabled={pending}>

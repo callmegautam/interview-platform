@@ -1,4 +1,7 @@
-import { notFound } from "next/navigation";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,17 +13,56 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getInterview, getInterviewCandidates } from "@/lib/actions/interviews";
+import { apiGet } from "@/lib/api-client";
 import { formatDate } from "@/lib/utils";
 
-export default async function ResultsPage(props: { params: Promise<{ id: string }> }) {
-  const { id } = await props.params;
-  const [interview, candidatesList] = await Promise.all([
-    getInterview(id),
-    getInterviewCandidates(id),
-  ]);
+interface Interview {
+  id: string;
+  title: string;
+  description: string;
+  timeLimitMinutes: number;
+  status: string;
+}
 
-  if (!interview) notFound();
+interface Candidate {
+  id: string;
+  name: string;
+  email: string;
+  status: string;
+  completedAt: string | null;
+}
+
+export default function ResultsPage() {
+  const params = useParams<{ id: string }>();
+  const [interview, setInterview] = useState<Interview | null>(null);
+  const [candidatesList, setCandidatesList] = useState<Candidate[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const [interviewRes, candidatesRes] = await Promise.all([
+          apiGet<{ interview: Interview }>(`/api/interviews/${params.id}`),
+          apiGet<{ candidates: Candidate[] }>(`/api/interviews/${params.id}/candidates`),
+        ]);
+        setInterview(interviewRes.interview);
+        setCandidatesList(candidatesRes.candidates);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [params.id]);
+
+  if (loading) {
+    return <p className="text-sm text-muted-foreground">Loading...</p>;
+  }
+
+  if (!interview) {
+    return <p className="text-destructive">Interview not found</p>;
+  }
 
   return (
     <div className="space-y-6">
@@ -61,7 +103,7 @@ export default async function ResultsPage(props: { params: Promise<{ id: string 
                   {c.completedAt ? formatDate(c.completedAt) : "—"}
                 </TableCell>
                 <TableCell>
-                  <Link href={`/interviews/${id}/candidates/${c.id}`}>
+                  <Link href={`/interviews/${params.id}/candidates/${c.id}`}>
                     <Button variant="ghost" size="sm">Review</Button>
                   </Link>
                 </TableCell>

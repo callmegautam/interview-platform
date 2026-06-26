@@ -1,17 +1,40 @@
 "use client";
 
-import { useActionState } from "react";
+import { useState, FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
-import { signup } from "@/lib/auth/actions";
+import { apiPost } from "@/lib/api-client";
 
 export function SignupForm() {
-  const [state, action, pending] = useActionState(signup, undefined);
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setPending(true);
+    setError(null);
+
+    const form = new FormData(e.currentTarget);
+    try {
+      const res = await apiPost<{ redirect: string }>("/api/auth/signup", {
+        name: form.get("name"),
+        email: form.get("email"),
+        password: form.get("password"),
+      });
+      router.push(res.redirect);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Signup failed");
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
-    <form action={action} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="name">Company name</Label>
         <Input id="name" name="name" placeholder="Acme Inc." required />
@@ -24,8 +47,8 @@ export function SignupForm() {
         <Label htmlFor="password">Password</Label>
         <Input id="password" name="password" type="password" placeholder="At least 8 characters" required />
       </div>
-      {state?.error && (
-        <p className="text-sm text-destructive">{state.error}</p>
+      {error && (
+        <p className="text-sm text-destructive">{error}</p>
       )}
       <Button type="submit" className="w-full" disabled={pending}>
         {pending ? "Creating account..." : "Create account"}

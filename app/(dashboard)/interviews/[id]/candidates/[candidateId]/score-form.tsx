@@ -1,13 +1,13 @@
 "use client";
 
-import { useActionState } from "react";
+import { useState, FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { saveScore } from "@/lib/actions/scoring";
+import { apiPost } from "@/lib/api-client";
 import { toast } from "sonner";
-import { useEffect } from "react";
 
 export function ScoreForm({
   questionId,
@@ -22,19 +22,34 @@ export function ScoreForm({
   currentScore: number | null;
   currentFeedback: string | null;
 }) {
-  const [state, action, pending] = useActionState(saveScore, undefined);
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
-  useEffect(() => {
-    if (state?.success) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setPending(true);
+    setError(null);
+
+    const form = new FormData(e.currentTarget);
+    try {
+      await apiPost(`/api/interviews/${interviewId}/candidates/${candidateId}/scores`, {
+        questionId: form.get("questionId"),
+        score: form.get("score"),
+        feedback: form.get("feedback") || undefined,
+      });
       toast.success("Score saved");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save score");
+    } finally {
+      setPending(false);
     }
-  }, [state]);
+  }
 
   return (
-    <form action={action} className="space-y-3">
+    <form onSubmit={handleSubmit} className="space-y-3">
       <input type="hidden" name="questionId" value={questionId} />
-      <input type="hidden" name="candidateId" value={candidateId} />
-      <input type="hidden" name="interviewId" value={interviewId} />
 
       <div className="flex items-end gap-4">
         <div className="space-y-1">
@@ -65,8 +80,8 @@ export function ScoreForm({
         />
       </div>
 
-      {state?.error && (
-        <p className="text-sm text-destructive">{state.error}</p>
+      {error && (
+        <p className="text-sm text-destructive">{error}</p>
       )}
     </form>
   );

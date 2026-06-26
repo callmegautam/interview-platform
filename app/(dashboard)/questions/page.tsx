@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,12 +12,34 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getQuestions, deleteQuestion } from "@/lib/actions/questions";
+import { apiGet } from "@/lib/api-client";
 import { formatDate } from "@/lib/utils";
 import { DeleteButton } from "./delete-button";
 
-export default async function QuestionsPage() {
-  const questionsList = await getQuestions();
+interface Question {
+  id: string;
+  title: string;
+  type: string;
+  language: string | null;
+  createdAt: string;
+}
+
+export default function QuestionsPage() {
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  function loadQuestions() {
+    apiGet<{ questions: Question[] }>("/api/questions")
+      .then((res) => setQuestions(res.questions))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(loadQuestions, []);
+
+  if (loading) {
+    return <p className="text-sm text-muted-foreground">Loading...</p>;
+  }
 
   return (
     <div className="space-y-6">
@@ -30,7 +55,7 @@ export default async function QuestionsPage() {
         </Link>
       </div>
 
-      {questionsList.length === 0 ? (
+      {questions.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-16 text-center">
           <p className="text-lg font-medium">No questions yet</p>
           <p className="text-sm text-muted-foreground">
@@ -49,7 +74,7 @@ export default async function QuestionsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {questionsList.map((q) => (
+            {questions.map((q) => (
               <TableRow key={q.id}>
                 <TableCell className="font-medium">{q.title}</TableCell>
                 <TableCell>
@@ -64,7 +89,7 @@ export default async function QuestionsPage() {
                   {formatDate(q.createdAt)}
                 </TableCell>
                 <TableCell>
-                  <DeleteButton questionId={q.id} />
+                  <DeleteButton questionId={q.id} onDeleted={loadQuestions} />
                 </TableCell>
               </TableRow>
             ))}

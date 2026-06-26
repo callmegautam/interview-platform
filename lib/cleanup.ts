@@ -1,5 +1,3 @@
-"use server";
-
 import { getDb } from "@/lib/db";
 import { recordings } from "@/lib/db/schema";
 import { lt, eq } from "drizzle-orm";

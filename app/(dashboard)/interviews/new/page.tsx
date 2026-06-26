@@ -1,18 +1,44 @@
-import { getDb } from "@/lib/db";
-import { questions } from "@/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
-import { verifySession } from "@/lib/auth/dal";
-import { redirect } from "next/navigation";
+"use client";
+
+import { useEffect, useState } from "react";
 import { InterviewForm } from "./interview-form";
 import { Card, CardContent } from "@/components/ui/card";
+import { apiGet } from "@/lib/api-client";
 
-export default async function NewInterviewPage() {
-  const session = await verifySession();
-  if (!session) redirect("/login");
+interface Question {
+  id: string;
+  title: string;
+  type: "code" | "text";
+  language: string | null;
+}
 
-  const { db, error } = getDb();
+export default function NewInterviewPage() {
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!db || error) {
+  useEffect(() => {
+    apiGet<{ questions: Question[] }>("/api/questions")
+      .then((res) => setQuestions(res.questions))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-2xl space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Create interview</h1>
+          <p className="text-sm text-muted-foreground">
+            Set up a new interview with questions and candidate details
+          </p>
+        </div>
+        <p className="text-sm text-muted-foreground">Loading questions...</p>
+      </div>
+    );
+  }
+
+  if (error) {
     return (
       <div className="mx-auto max-w-2xl space-y-6">
         <div>
@@ -23,18 +49,12 @@ export default async function NewInterviewPage() {
         </div>
         <Card>
           <CardContent className="py-8 text-center text-sm text-destructive">
-            Database is not available. Please check your configuration and try again.
+            {error}
           </CardContent>
         </Card>
       </div>
     );
   }
-
-  const companyQuestions = await db
-    .select()
-    .from(questions)
-    .where(eq(questions.companyId, session.userId))
-    .orderBy(desc(questions.createdAt));
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -44,7 +64,7 @@ export default async function NewInterviewPage() {
           Set up a new interview with questions and candidate details
         </p>
       </div>
-      <InterviewForm questions={companyQuestions} />
+      <InterviewForm questions={questions} />
     </div>
   );
 }

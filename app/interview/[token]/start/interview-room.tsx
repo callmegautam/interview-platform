@@ -1,14 +1,12 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { MonacoEditor } from "@/components/editor/MonacoEditor";
 import { Timer } from "@/components/interview/Timer";
 import { TabMonitor } from "@/components/interview/TabMonitor";
-import { submitAnswers, saveRecording } from "@/lib/actions/interview-take";
 
 interface Question {
   id: string;
@@ -33,7 +31,6 @@ export function InterviewRoom({
   questions: Question[];
   webcamEnabled: boolean;
 }) {
-  const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [answers, setAnswers] = useState<Record<string, { text: string; code: string }>>({});
@@ -135,6 +132,16 @@ export function InterviewRoom({
     }));
   };
 
+  async function uploadRecording(blob: Blob, candidateId: string, type: string) {
+    const formData = new FormData();
+    formData.append("file", blob, `${candidateId}-${type}.webm`);
+    formData.append("candidateId", candidateId);
+    formData.append("type", type);
+    const res = await fetch("/api/upload", { method: "POST", body: formData });
+    const data = await res.json();
+    return data.path as string;
+  }
+
   const handleSubmit = useCallback(async () => {
     if (submitting) return;
     setSubmitting(true);
@@ -155,29 +162,33 @@ export function InterviewRoom({
       }));
 
     try {
-      const candidateId = await submitAnswers(token, answersData);
+      const res = await fetch(`/api/interview/${token}/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers: answersData }),
+      });
+      const result = await res.json();
+      const candidateId = result.candidateId as string;
 
       if (screenBlob) {
-        const formData = new FormData();
-        formData.append("file", screenBlob, `${candidateId}-screen.webm`);
-        formData.append("candidateId", candidateId);
-        formData.append("type", "screen");
-        const res = await fetch("/api/upload", { method: "POST", body: formData });
-        const data = await res.json();
-        if (data.path) {
-          await saveRecording(token, "screen", data.path, screenBlob.size);
+        const path = await uploadRecording(screenBlob, candidateId, "screen");
+        if (path) {
+          await fetch(`/api/interview/${token}/recordings`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: "screen", storagePath: path, fileSize: screenBlob.size }),
+          });
         }
       }
 
       if (webcamBlob) {
-        const formData = new FormData();
-        formData.append("file", webcamBlob, `${candidateId}-webcam.webm`);
-        formData.append("candidateId", candidateId);
-        formData.append("type", "webcam");
-        const res = await fetch("/api/upload", { method: "POST", body: formData });
-        const data = await res.json();
-        if (data.path) {
-          await saveRecording(token, "webcam", data.path, webcamBlob.size);
+        const path = await uploadRecording(webcamBlob, candidateId, "webcam");
+        if (path) {
+          await fetch(`/api/interview/${token}/recordings`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: "webcam", storagePath: path, fileSize: webcamBlob.size }),
+          });
         }
       }
     } catch (err) {
